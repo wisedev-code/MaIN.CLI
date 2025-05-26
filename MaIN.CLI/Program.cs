@@ -1,6 +1,4 @@
-﻿using Commands = MaIN.CLI.CommandHandlers.CommandHandlers;
-
-namespace MaIN.CLI;
+﻿namespace MaIN.CLI;
 
 public class Program
 {
@@ -10,9 +8,11 @@ public class Program
 
     public static async Task Main(string[] args)
     {
+        var commandHandler = new CommandHandlers.CommandHandlers();
+        
         if (args.Length == 0)
         {
-            Commands.ShowUsage();
+            commandHandler.ShowUsage();
             return;
         }
 
@@ -22,39 +22,39 @@ public class Program
         switch (command.ToLower())
         {
             case "start-demo":
-                await Commands.StartDemo(arguments);
+                await commandHandler.StartDemo(arguments);
                 break;
             case "api":
-                await Commands.StartApi(arguments);
+                await commandHandler.StartApi(arguments);
                 break;
             case "image-gen":
-                await Commands.StartImageGen(arguments);
+                await commandHandler.StartImageGen(arguments);
                 break;
             case "model":
-                await Commands.HandleModelCommand(arguments);
+                await commandHandler.HandleModelCommand(arguments);
                 break;
             case "config":
-                await Commands.HandleConfigCommand(arguments);
+                await commandHandler.HandleConfigCommand(arguments);
                 break;
             case "infer":
-                await Commands.HandleInferCommand(arguments);
+                await commandHandler.HandleInferCommand(arguments);
                 break;
             case "uninstall":
-                await Commands.Uninstall();
+                await commandHandler.Uninstall();
                 break;
             case "help":
                 if (arguments.Length > 0)
                 {
-                    Commands.ShowCommandHelp(arguments[0]);
+                    commandHandler.ShowCommandHelp(arguments[0]);
                 }
                 else
                 {
-                    Commands.ShowUsage();
+                    commandHandler.ShowUsage();
                 }
 
                 break;
             default:
-                Commands.ShowUsage();
+                commandHandler.ShowUsage();
                 if (!string.IsNullOrEmpty(command))
                 {
                     Console.ForegroundColor = ConsoleColor.Red;

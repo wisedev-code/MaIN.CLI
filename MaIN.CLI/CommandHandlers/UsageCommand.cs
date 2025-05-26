@@ -1,8 +1,8 @@
 ﻿namespace MaIN.CLI.CommandHandlers;
 
-internal static partial class CommandHandlers
+internal partial class CommandHandlers
 {
-    internal static void ShowUsage()
+    internal void ShowUsage()
     {
         Console.WriteLine(@"
 MaIN CLI (mcli) - Command Line Interface for MaIN

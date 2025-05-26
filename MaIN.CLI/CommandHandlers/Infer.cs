@@ -3,9 +3,9 @@ using MaIN.CLI.Utils;
 
 namespace MaIN.CLI.CommandHandlers;
 
-internal static partial class CommandHandlers
+internal partial class CommandHandlers
 {
-    internal static async Task HandleInferCommand(string[] args)
+    internal async Task HandleInferCommand(string[] args)
     {
         if (args.Length == 0)
         {

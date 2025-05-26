@@ -43,9 +43,17 @@ foreach (string dirName in directoriesToCopy)
             Console.WriteLine($"File not found: {fileName}");
         }
     }
-            
-    Console.WriteLine("Installation completed! You can now use CLI by calling 'mcli' in terminal.");
 }
+
+var currentPath = Environment.GetEnvironmentVariable("PATH");
+    
+if (!currentPath.Contains(cliPath))
+{
+    var newPath = currentPath + Path.PathSeparator + cliPath;
+    Environment.SetEnvironmentVariable("PATH", newPath, EnvironmentVariableTarget.User);
+}
+
+Console.WriteLine("Installation completed! You can now use CLI by calling 'mcli' in terminal.");
 
 static void CopyDirectory(string sourceDir, string destinationDir)
 {

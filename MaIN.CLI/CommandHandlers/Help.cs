@@ -1,8 +1,8 @@
 ﻿namespace MaIN.CLI.CommandHandlers;
 
-internal static partial class CommandHandlers
+internal partial class CommandHandlers
 {
-    internal static void ShowCommandHelp(string cmd)
+    internal void ShowCommandHelp(string cmd)
     {
         switch (cmd.ToLower())
         {

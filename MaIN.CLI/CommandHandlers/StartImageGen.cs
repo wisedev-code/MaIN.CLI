@@ -3,9 +3,9 @@ using MaIN.CLI.Utils;
 
 namespace MaIN.CLI.CommandHandlers;
 
-internal static partial class CommandHandlers
+internal partial class CommandHandlers
 {
-    internal static async Task StartImageGen(string[] args)
+    internal async Task StartImageGen(string[] args)
     {
         var manager = new PythonManager();
 

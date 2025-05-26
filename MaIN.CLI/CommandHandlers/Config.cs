@@ -1,8 +1,8 @@
 ﻿namespace MaIN.CLI.CommandHandlers;
 
-internal static partial class CommandHandlers
+internal partial class CommandHandlers
 {
-    internal static async Task HandleConfigCommand(string[] args)
+    internal async Task HandleConfigCommand(string[] args)
     {
         if (args.Length == 0 || args[0].ToLower() != "set")
         {

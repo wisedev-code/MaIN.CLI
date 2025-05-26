@@ -2,9 +2,9 @@
 
 namespace MaIN.CLI.CommandHandlers;
 
-internal static partial class CommandHandlers
+internal partial class CommandHandlers
 {
-    internal static async Task HandleModelCommand(string[] args)
+    internal async Task HandleModelCommand(string[] args)
     {
         var modelsPath = Environment.GetEnvironmentVariable("MaIN_ModelsPath");
 
