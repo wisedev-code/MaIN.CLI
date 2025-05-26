@@ -54,6 +54,8 @@ if (!currentPath.Contains(cliPath))
 }
 
 Console.WriteLine("Installation completed! You can now use CLI by calling 'mcli' in terminal.");
+Console.WriteLine("Press any key to exit...");
+Console.ReadKey();
 
 static void CopyDirectory(string sourceDir, string destinationDir)
 {

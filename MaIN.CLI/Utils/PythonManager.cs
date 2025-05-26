@@ -5,7 +5,6 @@ namespace MaIN.CLI.Utils;
 
 internal class PythonManager
 {
-    private readonly string _installRoot = Environment.CurrentDirectory;
     private readonly string _pythonVersion = "3.9.13";
     private Process _apiProcess;
     
@@ -31,7 +30,6 @@ internal class PythonManager
     
     private async Task<string> GetOrInstallPythonWindowsAsync()
     {
-        //var pythonInstallDir = @"C:\Program Files\Python39";
         var pythonInstallDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Programs", "Python", "Python39");
         var pythonExe = Path.Combine(pythonInstallDir, "python.exe");
@@ -53,10 +51,6 @@ internal class PythonManager
     {
         // First check if python3 is available
         var pythonExe = await FindPythonExecutableAsync("python3");
-        if (pythonExe == null)
-        {
-            pythonExe = await FindPythonExecutableAsync("python");
-        }
 
         if (pythonExe != null && await IsPythonVersionCompatible(pythonExe))
         {
@@ -68,8 +62,7 @@ internal class PythonManager
         await InstallPythonLinuxAsync();
         
         // Try to find Python again after installation
-        pythonExe = await FindPythonExecutableAsync("python3") ?? 
-                   await FindPythonExecutableAsync("python");
+        pythonExe = await FindPythonExecutableAsync("python3");
         
         if (pythonExe == null)
         {
@@ -83,10 +76,6 @@ internal class PythonManager
     {
         // First check if python3 is available
         var pythonExe = await FindPythonExecutableAsync("python3");
-        if (pythonExe == null)
-        {
-            pythonExe = await FindPythonExecutableAsync("python");
-        }
 
         if (pythonExe != null && await IsPythonVersionCompatible(pythonExe))
         {
@@ -106,8 +95,7 @@ internal class PythonManager
         }
 
         // Try to find Python again after installation
-        pythonExe = await FindPythonExecutableAsync("python3") ?? 
-                   await FindPythonExecutableAsync("python");
+        pythonExe = await FindPythonExecutableAsync("python3");
         
         if (pythonExe == null)
         {
@@ -209,7 +197,7 @@ internal class PythonManager
         var installProcess = Process.Start(new ProcessStartInfo
         {
             FileName = installerPath,
-            Arguments = "/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1",
+            Arguments = "/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1",
             UseShellExecute = false
         });
 
@@ -275,11 +263,13 @@ internal class PythonManager
     {
         Console.WriteLine("Installing dependencies from requirements.txt...");
         
-        var requirementsPath = Path.Combine(_installRoot, "ImageGen", "requirements.txt");
-        await RunPythonCommand(pythonExe, $"-m pip install --default-timeout=900 -r \"{requirementsPath}\"");
+        var requirementsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ImageGen", "requirements.txt");
+
+        var requirements = (await File.ReadAllTextAsync(requirementsPath)).Replace(Environment.NewLine, " ");
+
+        await RunPythonCommand(pythonExe, $"-m pip install {requirements}");
     }
 
-    
 
     private async Task RunPythonCommand(string pythonExe, string arguments)
     {
@@ -288,27 +278,49 @@ internal class PythonManager
 
     private async Task RunCommandAsync(string fileName, string arguments)
     {
-        var process = Process.Start(new ProcessStartInfo
+        var process = new Process
         {
-            FileName = fileName,
-            Arguments = arguments,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        });
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            }
+        };
+        
+        process.OutputDataReceived += (sender, args) => Console.WriteLine(args.Data);
+        process.ErrorDataReceived += (sender, args) => Console.WriteLine($"ERROR: {args.Data}");
 
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
         await process.WaitForExitAsync();
 
-        if (process.ExitCode != 0)
-        {
-            var error = await process.StandardError.ReadToEndAsync();
-            throw new InvalidOperationException($"Command '{fileName} {arguments}' failed: {error}");
-        }
-
-        var output = await process.StandardOutput.ReadToEndAsync();
-        if (!string.IsNullOrWhiteSpace(output))
-        {
-            Console.WriteLine(output);
-        }
+        Console.WriteLine($"Exit code: {process.ExitCode}");
+        
+        // var process = Process.Start(new ProcessStartInfo
+        // {
+        //     FileName = fileName,
+        //     Arguments = arguments,
+        //     UseShellExecute = false,
+        //     RedirectStandardOutput = true,
+        //     RedirectStandardError = true,
+        // });
+        //
+        // await process.WaitForExitAsync();
+        //
+        // if (process.ExitCode != 0)
+        // {
+        //     var error = await process.StandardError.ReadToEndAsync();
+        //     throw new InvalidOperationException($"Command '{fileName} {arguments}' failed: {error}");
+        // }
+        //
+        // var output = await process.StandardOutput.ReadToEndAsync();
+        // if (!string.IsNullOrWhiteSpace(output))
+        // {
+        //     Console.WriteLine(output);
+        // }
     }
 }
