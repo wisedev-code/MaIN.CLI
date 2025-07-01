@@ -1,0 +1,211 @@
+name: Build and Publish MaIN.CLI
+
+on:
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  PROJECT_PATH: './MaIN.CLI.Installer/MaIN.CLI.Installer.csproj'
+  OUTPUT_NAME: 'MaIN.CLI.Installer'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.PROJECT_PATH }}
+
+    - name: Download workflow artifacts from external repository
+      uses: dawidd6/action-download-artifact@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        repo: wisedev-code/MaIN.NET
+        workflow: build-and-publish-inferpage.yml 
+        name: main-inferpage-build
+        path: ./temp-artifacts/
+
+    - name: Extract and place inferpage build artifacts
+      run : |
+        echo "Processing main-inferpage-build artifact..."
+        mkdir -p ./MaIN.CLI/infer
+        echo "Contents of temp-artifacts:"
+        find ./temp-artifacts -type f | head -20
+        
+        if [ -f "./temp-artifacts/main-inferpage-build.zip" ]; then
+          echo "Found zip file, extracting..."
+          unzip -q "./temp-artifacts/main-inferpage-build.zip" -d ./MaIN.CLI/infer/
+        elif [ -d "./temp-artifacts" ] && [ "$(ls -A ./temp-artifacts)" ]; then
+          echo "Found extracted files, copying directly..."
+          # Copy all files from temp-artifacts to infer directory
+          cp -r ./temp-artifacts/* ./MaIN.CLI/infer/
+        else
+          echo "Error: Could not find main-inferpage-build artifact"
+          exit 1
+        fi
+
+        find ./MaIN.CLI/infer -name "*.zip" -delete
+
+        echo "Files placed in MaIN.CLI/infer:"
+        find ./MaIN.CLI/infer -type f | head -20
+
+        rm -rf ./temp-artifacts
+
+
+        
+        
+    - name: Process downloaded artifacts
+      run: |
+        echo "Processing downloaded artifacts..."
+        
+        # Check if artifacts were downloaded
+        if [ -d "./external-deps" ]; then
+          echo "Contents of external-deps:"
+          find ./external-deps -type f -name "*.zip" -o -name "*.dll" -o -name "*.exe" | head -20
+          
+          # If the artifact is a zip file, extract it
+          if [ -f "./artifact.zip" ] || [ -f "./external-deps"/*.zip ]; then
+            echo "Extracting zip files..."
+            cd ./external-deps
+            for zip_file in *.zip; do
+              if [ -f "$zip_file" ]; then
+                echo "Extracting $zip_file"
+                unzip -q "$zip_file"
+                rm "$zip_file"  # Remove zip after extraction
+              fi
+            done
+            cd ..
+          fi
+          
+          echo "Final contents of external-deps:"
+          find ./external-deps -type f | head -20
+        else
+          echo "Warning: No external dependencies downloaded"
+        fi
+        
+    - name: Build project
+      run: |
+        dotnet build ${{ env.PROJECT_PATH }} \
+          --configuration Release \
+          --no-restore \
+          --verbosity normal
+          
+    - name: Run tests
+      run: |
+        dotnet test ${{ env.PROJECT_PATH }} \
+          --configuration Release \
+          --no-build \
+          --verbosity normal \
+          --collect:"XPlat Code Coverage"
+          
+    - name: Publish self-contained executable (Windows)
+      run: |
+        dotnet publish ${{ env.PROJECT_PATH }} \
+          --configuration Release \
+          --runtime win-x64 \
+          --self-contained true \
+          --output ./publish/win-x64 \
+          -p:PublishSingleFile=true \
+          -p:IncludeNativeLibrariesForSelfExtract=true \
+          -p:PublishTrimmed=true \
+          -p:TrimMode=partial
+          
+    - name: Publish self-contained executable (Linux)
+      run: |
+        dotnet publish ${{ env.PROJECT_PATH }} \
+          --configuration Release \
+          --runtime linux-x64 \
+          --self-contained true \
+          --output ./publish/linux-x64 \
+          -p:PublishSingleFile=true \
+          -p:IncludeNativeLibrariesForSelfExtract=true \
+          -p:PublishTrimmed=true \
+          -p:TrimMode=partial
+          
+    - name: Publish self-contained executable (macOS)
+      run: |
+        dotnet publish ${{ env.PROJECT_PATH }} \
+          --configuration Release \
+          --runtime osx-x64 \
+          --self-contained true \
+          --output ./publish/osx-x64 \
+          -p:PublishSingleFile=true \
+          -p:IncludeNativeLibrariesForSelfExtract=true \
+          -p:PublishTrimmed=true \
+          -p:TrimMode=partial
+          
+    - name: Prepare artifacts for upload
+      run: |
+        # Create release directory
+        mkdir -p ./release
+        
+        # Rename executables and move to release directory
+        if [ -f "./publish/win-x64/${{ env.OUTPUT_NAME }}.exe" ]; then
+          cp "./publish/win-x64/${{ env.OUTPUT_NAME }}.exe" "./release/${{ env.OUTPUT_NAME }}-win-x64.exe"
+        fi
+        
+        if [ -f "./publish/linux-x64/${{ env.OUTPUT_NAME }}" ]; then
+          cp "./publish/linux-x64/${{ env.OUTPUT_NAME }}" "./release/${{ env.OUTPUT_NAME }}-linux-x64"
+        fi
+        
+        if [ -f "./publish/osx-x64/${{ env.OUTPUT_NAME }}" ]; then
+          cp "./publish/osx-x64/${{ env.OUTPUT_NAME }}" "./release/${{ env.OUTPUT_NAME }}-osx-x64"
+        fi
+        
+        # List what we're going to upload
+        echo "Files prepared for upload:"
+        ls -la ./release/
+        
+    - name: Upload Windows executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.OUTPUT_NAME }}-windows-x64
+        path: ./release/${{ env.OUTPUT_NAME }}-win-x64.exe
+        retention-days: 30
+        
+    - name: Upload Linux executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.OUTPUT_NAME }}-linux-x64
+        path: ./release/${{ env.OUTPUT_NAME }}-linux-x64
+        retention-days: 30
+        
+    - name: Upload macOS executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.OUTPUT_NAME }}-macos-x64
+        path: ./release/${{ env.OUTPUT_NAME }}-osx-x64
+        retention-days: 30
+        
+    - name: Create Release (on main branch)
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ github.run_number }}
+        name: Release v${{ github.run_number }}
+        draft: false
+        prerelease: false
+        files: |
+          ./release/${{ env.OUTPUT_NAME }}-win-x64.exe
+          ./release/${{ env.OUTPUT_NAME }}-linux-x64
+          ./release/${{ env.OUTPUT_NAME }}-osx-x64
+        body: |
+          ## Changes
+          - Automated release from commit ${{ github.sha }}
+          
+          ## Downloads
+          - **Windows**: `${{ env.OUTPUT_NAME }}-win-x64.exe`
+          - **Linux**: `${{ env.OUTPUT_NAME }}-linux-x64`
+          - **macOS**: `${{ env.OUTPUT_NAME }}-osx-x64`
+          
+          All executables are self-contained and include all necessary dependencies.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
