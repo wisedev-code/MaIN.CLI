@@ -58,9 +58,6 @@ jobs:
         find ./MaIN.CLI/infer -type f | head -20
 
         rm -rf ./temp-artifacts
-
-
-        
         
     - name: Process downloaded artifacts
       run: |
@@ -146,6 +143,17 @@ jobs:
       run: |
         # Create release directory
         mkdir -p ./release
+        
+        echo "Checking publish directory:"
+        ls -la ./publish/
+        echo "Checking Windows publish directory:"
+        ls -la ./publish/win-x64/
+        echo "Checking Linux publish directory:"
+        ls -la ./publish/linux-x64/
+        echo "Checking MacOS publish directory:"
+        ls -la ./publish/osx-x64/
+        echo "Checking release directory:"
+        ls -la ./release/
         
         # Rename executables and move to release directory
         if [ -f "./publish/win-x64/${{ env.OUTPUT_NAME }}.exe" ]; then
