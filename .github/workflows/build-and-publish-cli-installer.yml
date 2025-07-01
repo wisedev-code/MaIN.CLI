@@ -102,8 +102,6 @@ jobs:
           --runtime win-x64 \
           --output ./publish/win-x64 \
           --self-contained false
-          -p:PublishTrimmed=true \
-          -p:TrimMode=partial
           
     - name: Publish (Linux)
       run: |
@@ -112,8 +110,6 @@ jobs:
           --runtime linux-x64 \
           --output ./publish/linux-x64 \
           --self-contained false
-          -p:PublishTrimmed=true \
-          -p:TrimMode=partial
           
     - name: Publish (macOS)
       run: |
@@ -122,8 +118,6 @@ jobs:
           --runtime osx-x64 \
           --output ./publish/osx-x64 \
           --self-contained false
-          -p:PublishTrimmed=true \
-          -p:TrimMode=partial
           
     - name: Prepare artifacts for upload
       run: |
