@@ -6,7 +6,7 @@ on:
 env:
   DOTNET_VERSION: '9.0.x'
   PROJECT_PATH: './MaIN.CLI.Installer/MaIN.CLI.Installer.csproj'
-  OUTPUT_NAME: 'MaIN.CLI.Installer'
+  OUTPUT_NAME: 'Installer'
 
 jobs:
   build-and-publish:
