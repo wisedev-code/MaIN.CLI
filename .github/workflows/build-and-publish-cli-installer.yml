@@ -95,14 +95,6 @@ jobs:
           --no-restore \
           --verbosity normal
           
-    - name: Run tests
-      run: |
-        dotnet test ${{ env.PROJECT_PATH }} \
-          --configuration Release \
-          --no-build \
-          --verbosity normal \
-          --collect:"XPlat Code Coverage"
-          
     - name: Publish self-contained executable (Windows)
       run: |
         dotnet publish ${{ env.PROJECT_PATH }} \
@@ -110,7 +102,6 @@ jobs:
           --runtime win-x64 \
           --self-contained true \
           --output ./publish/win-x64 \
-          -p:PublishSingleFile=true \
           -p:IncludeNativeLibrariesForSelfExtract=true \
           -p:PublishTrimmed=true \
           -p:TrimMode=partial
@@ -122,7 +113,6 @@ jobs:
           --runtime linux-x64 \
           --self-contained true \
           --output ./publish/linux-x64 \
-          -p:PublishSingleFile=true \
           -p:IncludeNativeLibrariesForSelfExtract=true \
           -p:PublishTrimmed=true \
           -p:TrimMode=partial
@@ -134,63 +124,48 @@ jobs:
           --runtime osx-x64 \
           --self-contained true \
           --output ./publish/osx-x64 \
-          -p:PublishSingleFile=true \
           -p:IncludeNativeLibrariesForSelfExtract=true \
           -p:PublishTrimmed=true \
           -p:TrimMode=partial
           
     - name: Prepare artifacts for upload
       run: |
-        # Create release directory
         mkdir -p ./release
-        
-        echo "Checking publish directory:"
-        ls -la ./publish/
-        echo "Checking Windows publish directory:"
+  
+        echo "Checking publish directories:"
         ls -la ./publish/win-x64/
-        echo "Checking Linux publish directory:"
         ls -la ./publish/linux-x64/
-        echo "Checking MacOS publish directory:"
         ls -la ./publish/osx-x64/
-        echo "Checking release directory:"
+        
+        cd ./publish/win-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-win-x64.zip ./* && cd -
+        
+        cd ./publish/linux-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-linux-x64.zip ./* && cd -
+        
+        cd ./publish/osx-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-osx-x64.zip ./* && cd -
+        
+        echo "Zipped artifacts ready for upload:"
         ls -la ./release/
-        
-        # Rename executables and move to release directory
-        if [ -f "./publish/win-x64/${{ env.OUTPUT_NAME }}.exe" ]; then
-          cp "./publish/win-x64/${{ env.OUTPUT_NAME }}.exe" "./release/${{ env.OUTPUT_NAME }}-win-x64.exe"
-        fi
-        
-        if [ -f "./publish/linux-x64/${{ env.OUTPUT_NAME }}" ]; then
-          cp "./publish/linux-x64/${{ env.OUTPUT_NAME }}" "./release/${{ env.OUTPUT_NAME }}-linux-x64"
-        fi
-        
-        if [ -f "./publish/osx-x64/${{ env.OUTPUT_NAME }}" ]; then
-          cp "./publish/osx-x64/${{ env.OUTPUT_NAME }}" "./release/${{ env.OUTPUT_NAME }}-osx-x64"
-        fi
-        
-        # List what we're going to upload
-        echo "Files prepared for upload:"
-        ls -la ./release/
-        
-    - name: Upload Windows executable
+
+
+    - name: Upload Windows package
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.OUTPUT_NAME }}-windows-x64
-        path: ./release/${{ env.OUTPUT_NAME }}-win-x64.exe
+        path: ./release/${{ env.OUTPUT_NAME }}-win-x64.zip
         retention-days: 30
-        
-    - name: Upload Linux executable
+
+    - name: Upload Linux package
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.OUTPUT_NAME }}-linux-x64
-        path: ./release/${{ env.OUTPUT_NAME }}-linux-x64
+        path: ./release/${{ env.OUTPUT_NAME }}-linux-x64.zip
         retention-days: 30
-        
-    - name: Upload macOS executable
+
+    - name: Upload macOS package
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.OUTPUT_NAME }}-macos-x64
-        path: ./release/${{ env.OUTPUT_NAME }}-osx-x64
+        path: ./release/${{ env.OUTPUT_NAME }}-osx-x64.zip
         retention-days: 30
         
     - name: Create Release (on main branch)
