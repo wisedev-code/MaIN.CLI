@@ -137,11 +137,11 @@ jobs:
         ls -la ./publish/linux-x64/
         ls -la ./publish/osx-x64/
         
-        cd ./publish/win-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-win-x64.zip ./* && cd -
+        # cd ./publish/win-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-win-x64.zip ./* && cd -
         
-        cd ./publish/linux-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-linux-x64.zip ./* && cd -
+        # cd ./publish/linux-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-linux-x64.zip ./* && cd -
         
-        cd ./publish/osx-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-osx-x64.zip ./* && cd -
+        # cd ./publish/osx-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-osx-x64.zip ./* && cd -
         
         echo "Zipped artifacts ready for upload:"
         ls -la ./release/
@@ -151,21 +151,21 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.OUTPUT_NAME }}-windows-x64
-        path: ./release/${{ env.OUTPUT_NAME }}-win-x64.zip
+        path: ./publish/win-x64/
         retention-days: 30
 
     - name: Upload Linux package
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.OUTPUT_NAME }}-linux-x64
-        path: ./release/${{ env.OUTPUT_NAME }}-linux-x64.zip
+        path: ./publish/linux-x64/
         retention-days: 30
 
     - name: Upload macOS package
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.OUTPUT_NAME }}-macos-x64
-        path: ./release/${{ env.OUTPUT_NAME }}-osx-x64.zip
+        path: ./publish/osx-x64/
         retention-days: 30
         
     - name: Create Release (on main branch)
@@ -177,7 +177,7 @@ jobs:
         draft: false
         prerelease: false
         files: |
-          ./release/${{ env.OUTPUT_NAME }}-win-x64.exe
+          ./release/${{ env.OUTPUT_NAME }}-win-x64
           ./release/${{ env.OUTPUT_NAME }}-linux-x64
           ./release/${{ env.OUTPUT_NAME }}-osx-x64
         body: |
@@ -185,7 +185,7 @@ jobs:
           - Automated release from commit ${{ github.sha }}
           
           ## Downloads
-          - **Windows**: `${{ env.OUTPUT_NAME }}-win-x64.exe`
+          - **Windows**: `${{ env.OUTPUT_NAME }}-win-x64`
           - **Linux**: `${{ env.OUTPUT_NAME }}-linux-x64`
           - **macOS**: `${{ env.OUTPUT_NAME }}-osx-x64`
           
