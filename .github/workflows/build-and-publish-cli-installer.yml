@@ -147,7 +147,7 @@ jobs:
         run: |
           DMG_NAME="${{ env.OUTPUT_NAME }}-macos-x64.dmg"
           VOLUME_NAME="MaIN.CLI Installer"
-          APP_DIR="./artifacts/osx-x64"
+          APP_DIR="./publish/osx-x64"
           
           # Create layout directory
           mkdir dmg-layout
