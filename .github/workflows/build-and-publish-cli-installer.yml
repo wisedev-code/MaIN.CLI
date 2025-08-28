@@ -164,9 +164,9 @@ jobs:
         draft: false
         prerelease: false
         files: |
-          ./release/${{ env.OUTPUT_NAME }}-win-x64
-          ./release/${{ env.OUTPUT_NAME }}-linux-x64
-          ./release/${{ env.OUTPUT_NAME }}-osx-x64
+          ./release/${{ env.OUTPUT_NAME }}-win-x64.zip
+          ./release/${{ env.OUTPUT_NAME }}-linux-x64.zip
+          ./release/${{ env.OUTPUT_NAME }}-osx-x64.zip
         body: |
           ## Changes
           - Automated release from commit ${{ github.sha }}
