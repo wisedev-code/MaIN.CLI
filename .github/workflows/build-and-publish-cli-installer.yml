@@ -159,8 +159,7 @@ jobs:
         path: ./publish/osx-x64/
         retention-days: 30
         
-    - name: Create Release (on main branch)
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: v${{ github.run_number }}
