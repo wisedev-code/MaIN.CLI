@@ -128,15 +128,12 @@ jobs:
         ls -la ./publish/linux-x64/
         ls -la ./publish/osx-x64/
         
-        # cd ./publish/win-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-win-x64.zip ./* && cd -
-        
-        # cd ./publish/linux-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-linux-x64.zip ./* && cd -
-        
-        # cd ./publish/osx-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-osx-x64.zip ./* && cd -
+        cd ./publish/win-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-win-x64.zip ./* && cd -
+        cd ./publish/linux-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-linux-x64.zip ./* && cd -
+        cd ./publish/osx-x64 && zip -r ../../release/${{ env.OUTPUT_NAME }}-osx-x64.zip ./* && cd -
         
         echo "Zipped artifacts ready for upload:"
         ls -la ./release/
-
 
     - name: Upload Windows package
       uses: actions/upload-artifact@v4
