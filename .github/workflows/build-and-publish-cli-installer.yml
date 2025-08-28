@@ -111,6 +111,20 @@ jobs:
           --output ./publish/linux-x64 \
           --self-contained false
 
+    - name: Upload Windows package
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.OUTPUT_NAME }}-windows-x64
+        path: ./publish/win-x64/
+        retention-days: 30
+
+    - name: Upload Linux package
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.OUTPUT_NAME }}-linux-x64
+        path: ./publish/linux-x64/
+        retention-days: 30
+
   build-macos:
     runs-on: macos-latest
     
@@ -314,41 +328,84 @@ jobs:
     needs: [build-and-publish, build-macos]
     
     steps:
-    - name: Download all artifacts
+    - name: Download Windows artifacts
       uses: actions/download-artifact@v4
       with:
-        merge-multiple: true
-        path: ./artifacts
+        name: ${{ env.OUTPUT_NAME }}-windows-x64
+        path: ./artifacts/windows/
+      continue-on-error: true
+
+    - name: Download Linux artifacts  
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.OUTPUT_NAME }}-linux-x64
+        path: ./artifacts/linux/
+      continue-on-error: true
+
+    - name: Download macOS DMG
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.OUTPUT_NAME }}-macos-dmg
+        path: ./artifacts/macos-dmg/
+      continue-on-error: true
+
+    - name: Download macOS ZIP
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.OUTPUT_NAME }}-macos-zip  
+        path: ./artifacts/macos-zip/
+      continue-on-error: true
+
+    - name: Debug artifacts
+      run: |
+        echo "=== Checking what was downloaded ==="
+        ls -la ./
+        echo "=== Artifacts directory ==="
+        if [ -d "./artifacts" ]; then
+          find ./artifacts -type f -ls
+        else
+          echo "No artifacts directory found"
+        fi
 
     - name: Prepare release files
       run: |
         mkdir -p ./release
         
-        echo "Downloaded artifacts:"
-        find ./artifacts -type f | head -20
-        
-        # Create zips for Windows and Linux from downloaded artifacts
-        if [ -d "./artifacts" ] && find ./artifacts -name "*win*" -type d | grep -q .; then
-          WIN_DIR=$(find ./artifacts -name "*windows*" -type d | head -1)
-          if [ -n "$WIN_DIR" ] && [ -d "$WIN_DIR" ]; then
-            echo "Creating Windows zip from $WIN_DIR"
-            cd "$WIN_DIR" && zip -r "../../release/${{ env.OUTPUT_NAME }}-win-x64.zip" ./* && cd - || echo "Windows zip creation failed"
-          fi
+        # Create Windows zip
+        if [ -d "./artifacts/windows" ] && [ "$(ls -A ./artifacts/windows)" ]; then
+          echo "Creating Windows zip..."
+          cd ./artifacts/windows && zip -r "../../release/${{ env.OUTPUT_NAME }}-win-x64.zip" ./* && cd -
+          echo "Windows zip created successfully"
+        else
+          echo "Warning: Windows artifacts not found"
         fi
         
-        if [ -d "./artifacts" ] && find ./artifacts -name "*linux*" -type d | grep -q .; then
-          LINUX_DIR=$(find ./artifacts -name "*linux*" -type d | head -1)
-          if [ -n "$LINUX_DIR" ] && [ -d "$LINUX_DIR" ]; then
-            echo "Creating Linux zip from $LINUX_DIR"
-            cd "$LINUX_DIR" && zip -r "../../release/${{ env.OUTPUT_NAME }}-linux-x64.zip" ./* && cd - || echo "Linux zip creation failed"
-          fi
+        # Create Linux zip  
+        if [ -d "./artifacts/linux" ] && [ "$(ls -A ./artifacts/linux)" ]; then
+          echo "Creating Linux zip..."
+          cd ./artifacts/linux && zip -r "../../release/${{ env.OUTPUT_NAME }}-linux-x64.zip" ./* && cd -
+          echo "Linux zip created successfully"
+        else
+          echo "Warning: Linux artifacts not found"
         fi
         
-        # Copy macOS files
-        find ./artifacts -name "*macos*" -type f -exec cp {} ./release/ \;
-        find ./artifacts -name "*.dmg" -exec cp {} ./release/ \;
+        # Copy macOS DMG
+        if [ -d "./artifacts/macos-dmg" ]; then
+          echo "Copying macOS DMG..."
+          find ./artifacts/macos-dmg -name "*.dmg" -exec cp {} ./release/ \;
+        else
+          echo "Warning: macOS DMG not found"
+        fi
         
-        echo "Final release files:"
+        # Copy macOS ZIP
+        if [ -d "./artifacts/macos-zip" ]; then
+          echo "Copying macOS ZIP..."
+          find ./artifacts/macos-zip -name "*.zip" -exec cp {} ./release/ \;
+        else
+          echo "Warning: macOS ZIP not found"
+        fi
+        
+        echo "=== Final release files ==="
         ls -la ./release/
 
     - name: Create Release
