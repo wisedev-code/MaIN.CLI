@@ -1,3 +1,4 @@
+
 name: Build and Create MSI Installer
 
 on:
@@ -45,6 +46,9 @@ jobs:
           -p:PublishSingleFile=true `
           -p:PublishTrimmed=true
 
+      - name: Copy icon file for installer
+        run: Copy-Item "${{ env.PROJECT_NAME }}\main.ico" -Destination "main.ico"
+
       - name: Setup WiX Toolset
         run: |
           Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip" -OutFile "wix311-binaries.zip"
@@ -70,6 +74,8 @@ jobs:
           
               <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
               <MediaTemplate EmbedCab="yes" />
+              <Icon Id="ProductIcon" SourceFile="main.ico" />
+              <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
           
               <Feature Id="ProductFeature" Title="MaIN.NET CLI" Level="1">
                 <ComponentGroupRef Id="ProductComponents" />
@@ -82,7 +88,9 @@ jobs:
                     <Directory Id="INSTALLFOLDER" Name="MaIN.NET CLI" />
                   </Directory>
                 </Directory>
-                <Directory Id="System64Folder" />
+                <Directory Id="ProgramMenuFolder">
+                  <Directory Id="ApplicationProgramsFolder" Name="MaIN.NET CLI" />
+                </Directory>
               </Directory>
           
               <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
@@ -105,6 +113,22 @@ jobs:
                 <RegistryValue Root="HKCU" 
                              Key="Software\wisedev-code\MaIN.NET CLI" 
                              Name="PathInstalled" 
+                             Type="string" 
+                             Value="1" 
+                             KeyPath="yes" />
+              </Component>
+          
+              <Component Id="ApplicationShortcut" Directory="ApplicationProgramsFolder" Guid="{$(New-Guid)}">
+                <Shortcut Id="ApplicationStartMenuShortcut"
+                          Name="MaIN.NET CLI"
+                          Description="MaIN.NET CLI Tool"
+                          Target="[INSTALLFOLDER]mcli.exe"
+                          WorkingDirectory="INSTALLFOLDER"
+                          Icon="ProductIcon" />
+                <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+                <RegistryValue Root="HKCU" 
+                             Key="Software\wisedev-code\MaIN.NET CLI" 
+                             Name="ShortcutInstalled" 
                              Type="string" 
                              Value="1" 
                              KeyPath="yes" />
