@@ -1,468 +1,132 @@
-name: Build and Publish MaIN.CLI
+name: Build and Create MSI Installer
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
 
 env:
-  DOTNET_VERSION: '9.0.x'
-  PROJECT_PATH: './MaIN.CLI.Installer/MaIN.CLI.Installer.csproj'
-  OUTPUT_NAME: 'Installer'
+  PROJECT_NAME: MaIN.CLI
+  ASSEMBLY_NAME: mcli
+  DOTNET_VERSION: '8.0.x'
 
 jobs:
-  build-and-publish:
-    runs-on: ubuntu-latest
+  build-and-package:
+    runs-on: windows-latest
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-        
-    - name: Restore dependencies
-      run: dotnet restore ${{ env.PROJECT_PATH }}
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Download workflow artifacts from external repository
-      uses: dawidd6/action-download-artifact@v3
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        repo: wisedev-code/MaIN.NET
-        workflow: build-and-publish-inferpage.yml 
-        name: main-inferpage-build
-        path: ./temp-artifacts/
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-    - name: Extract and place inferpage build artifacts
-      run : |
-        echo "Processing main-inferpage-build artifact..."
-        mkdir -p ./MaIN.CLI/infer
-        echo "Contents of temp-artifacts:"
-        find ./temp-artifacts -type f | head -20
-        
-        if [ -f "./temp-artifacts/main-inferpage-build.zip" ]; then
-          echo "Found zip file, extracting..."
-          unzip -q "./temp-artifacts/main-inferpage-build.zip" -d ./MaIN.CLI/infer/
-        elif [ -d "./temp-artifacts" ] && [ "$(ls -A ./temp-artifacts)" ]; then
-          echo "Found extracted files, copying directly..."
-          # Copy all files from temp-artifacts to infer directory
-          cp -r ./temp-artifacts/* ./MaIN.CLI/infer/
-        else
-          echo "Error: Could not find main-inferpage-build artifact"
-          exit 1
-        fi
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}.csproj
 
-        find ./MaIN.CLI/infer -name "*.zip" -delete
+      - name: Build project
+        run: dotnet build ${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}.csproj --configuration Release --no-restore
 
-        echo "Files placed in MaIN.CLI/infer:"
-        find ./MaIN.CLI/infer -type f | head -20
+      - name: Test project (if tests exist)
+        run: dotnet test --configuration Release --no-build --verbosity normal
+        continue-on-error: true
 
-        rm -rf ./temp-artifacts
-        
-    - name: Process downloaded artifacts
-      run: |
-        echo "Processing downloaded artifacts..."
-        
-        # Check if artifacts were downloaded
-        if [ -d "./external-deps" ]; then
-          echo "Contents of external-deps:"
-          find ./external-deps -type f -name "*.zip" -o -name "*.dll" -o -name "*.exe" | head -20
+      - name: Publish self-contained executable
+        run: |
+          dotnet publish ${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}.csproj `
+          --configuration Release `
+          --runtime win-x64 `
+          --self-contained true `
+          --output ./publish `
+          -p:PublishSingleFile=true `
+          -p:PublishTrimmed=true
+
+      - name: Setup WiX Toolset
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip" -OutFile "wix311-binaries.zip"
+          Expand-Archive -Path "wix311-binaries.zip" -DestinationPath "wix"
+          echo "${{ github.workspace }}\wix" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Create WiX source file
+        run: |
+          $wxsContent = @"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+            <Product Id="*" 
+                     Name="MaIN.NET CLI" 
+                     Language="1033" 
+                     Version="1.0.0.0" 
+                     Manufacturer="wisedev-code" 
+                     UpgradeCode="{$(New-Guid)}">
           
-          # If the artifact is a zip file, extract it
-          if [ -f "./artifact.zip" ] || [ -f "./external-deps"/*.zip ]; then
-            echo "Extracting zip files..."
-            cd ./external-deps
-            for zip_file in *.zip; do
-              if [ -f "$zip_file" ]; then
-                echo "Extracting $zip_file"
-                unzip -q "$zip_file"
-                rm "$zip_file"  # Remove zip after extraction
-              fi
-            done
-            cd ..
-          fi
+              <Package InstallerVersion="200" 
+                       Compressed="yes" 
+                       InstallScope="perMachine" 
+                       Description="MaIN.NET CLI Tool" />
           
-          echo "Final contents of external-deps:"
-          find ./external-deps -type f | head -20
-        else
-          echo "Warning: No external dependencies downloaded"
-        fi
-        
-    - name: Build project
-      run: |
-        dotnet build ${{ env.PROJECT_PATH }} \
-          --configuration Release \
-          --no-restore \
-          --verbosity normal
+              <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+              <MediaTemplate EmbedCab="yes" />
           
-    - name: Publish (Windows)
-      run: |
-        dotnet publish ${{ env.PROJECT_PATH }} \
-          --configuration Release \
-          --runtime win-x64 \
-          --output ./publish/win-x64 \
-          --self-contained false
+              <Feature Id="ProductFeature" Title="MaIN.NET CLI" Level="1">
+                <ComponentGroupRef Id="ProductComponents" />
+                <ComponentRef Id="PathComponent" />
+              </Feature>
           
-    - name: Publish (Linux)
-      run: |
-        dotnet publish ${{ env.PROJECT_PATH }} \
-          --configuration Release \
-          --runtime linux-x64 \
-          --output ./publish/linux-x64 \
-          --self-contained false
-
-    - name: Upload Windows package
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.OUTPUT_NAME }}-windows-x64
-        path: ./publish/win-x64/
-        retention-days: 30
-
-    - name: Upload Linux package
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.OUTPUT_NAME }}-linux-x64
-        path: ./publish/linux-x64/
-        retention-days: 30
-
-  build-macos:
-    runs-on: macos-latest
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-        
-    - name: Restore dependencies
-      run: dotnet restore ${{ env.PROJECT_PATH }}
-
-    - name: Download workflow artifacts from external repository
-      uses: dawidd6/action-download-artifact@v3
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        repo: wisedev-code/MaIN.NET
-        workflow: build-and-publish-inferpage.yml 
-        name: main-inferpage-build
-        path: ./temp-artifacts/
-
-    - name: Extract and place inferpage build artifacts
-      run : |
-        echo "Processing main-inferpage-build artifact..."
-        mkdir -p ./MaIN.CLI/infer
-        echo "Contents of temp-artifacts:"
-        find ./temp-artifacts -type f | head -20
-        
-        if [ -f "./temp-artifacts/main-inferpage-build.zip" ]; then
-          echo "Found zip file, extracting..."
-          unzip -q "./temp-artifacts/main-inferpage-build.zip" -d ./MaIN.CLI/infer/
-        elif [ -d "./temp-artifacts" ] && [ "$(ls -A ./temp-artifacts)" ]; then
-          echo "Found extracted files, copying directly..."
-          # Copy all files from temp-artifacts to infer directory
-          cp -r ./temp-artifacts/* ./MaIN.CLI/infer/
-        else
-          echo "Error: Could not find main-inferpage-build artifact"
-          exit 1
-        fi
-
-        find ./MaIN.CLI/infer -name "*.zip" -delete
-        rm -rf ./temp-artifacts
-
-    - name: Build project
-      run: |
-        dotnet build ${{ env.PROJECT_PATH }} \
-          --configuration Release \
-          --no-restore \
-          --verbosity normal
+              <Directory Id="TARGETDIR" Name="SourceDir">
+                <Directory Id="ProgramFilesFolder">
+                  <Directory Id="CompanyFolder" Name="wisedev-code">
+                    <Directory Id="INSTALLFOLDER" Name="MaIN.NET CLI" />
+                  </Directory>
+                </Directory>
+                <Directory Id="System64Folder" />
+              </Directory>
           
-    - name: Publish (macOS)
-      run: |
-        dotnet publish ${{ env.PROJECT_PATH }} \
-          --configuration Release \
-          --runtime osx-x64 \
-          --output ./publish/osx-x64 \
-          --self-contained false
-
-    # Create macOS app bundle structure (unsigned version for testing)
-    - name: Create macOS App Bundle
-      run: |
-        APP_NAME="${{ env.OUTPUT_NAME }}.app"
-        mkdir -p "./bundle/$APP_NAME/Contents/MacOS"
-        mkdir -p "./bundle/$APP_NAME/Contents/Resources"
-        
-        # Copy the executable and dependencies
-        cp -r ./publish/osx-x64/* "./bundle/$APP_NAME/Contents/MacOS/"
-        
-        # Create Info.plist
-        cat > "./bundle/$APP_NAME/Contents/Info.plist" << EOF
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-            <key>CFBundleExecutable</key>
-            <string>${{ env.OUTPUT_NAME }}</string>
-            <key>CFBundleIconFile</key>
-            <string>icon</string>
-            <key>CFBundleIdentifier</key>
-            <string>com.wisedev.main.cli</string>
-            <key>CFBundleName</key>
-            <string>${{ env.OUTPUT_NAME }}</string>
-            <key>CFBundlePackageType</key>
-            <string>APPL</string>
-            <key>CFBundleShortVersionString</key>
-            <string>1.0.${{ github.run_number }}</string>
-            <key>CFBundleVersion</key>
-            <string>${{ github.run_number }}</string>
-            <key>LSMinimumSystemVersion</key>
-            <string>10.15</string>
-            <key>LSRequiresCarbon</key>
-            <false/>
-            <key>LSApplicationCategoryType</key>
-            <string>public.app-category.developer-tools</string>
-        </dict>
-        </plist>
-        EOF
-        
-        # Make executable file executable
-        chmod +x "./bundle/$APP_NAME/Contents/MacOS/${{ env.OUTPUT_NAME }}"
-
-    # Create installation instructions for unsigned app
-    - name: Create Installation Instructions
-      run: |
-        cat > "./bundle/INSTALL_INSTRUCTIONS_macOS.txt" << 'EOF'
-        MaIN CLI - macOS Installation Instructions
-        =========================================
-        
-        IMPORTANT: This application is currently UNSIGNED
-        
-        Security Warning Solution:
-        1. Drag Installer.app to your Applications folder
-        2. Try to open the app - you will see a security warning
-        3. Go to System Preferences → Security & Privacy → General tab
-        4. You'll see a message about "Installer" being blocked
-        5. Click "Open Anyway" next to that message
-        6. Confirm by clicking "Open" in the dialog
-        
-        Alternative Method:
-        1. Right-click on Installer.app in Applications
-        2. Select "Open" from the context menu
-        3. Click "Open" in the warning dialog that appears
-        
-        This is a ONE-TIME process. After this, the app will launch normally.
-        
-        Why this happens:
-        - Apple requires developer certificates ($99/year) to sign apps
-        - This prevents the security warning from appearing
-        - The app is safe - it's built from open source code via GitHub Actions
-        
-        Troubleshooting:
-        - If the app won't launch, make sure you have .NET 9.0 runtime installed
-        - Check Terminal.app for any error messages when launching
-        
-        For support: https://github.com/wisedev-code/MaIN.CLI/issues
-        EOF
-
-    # Create DMG with installation instructions
-    - name: Create DMG
-      run: |
-        # Install create-dmg
-        brew install create-dmg
-        
-        # Create DMG with installation instructions
-        create-dmg \
-          --volname "MaIN CLI Installer" \
-          --volicon "" \
-          --background-color "#ffffff" \
-          --window-pos 200 120 \
-          --window-size 800 500 \
-          --icon-size 100 \
-          --text-size 12 \
-          --icon "${{ env.OUTPUT_NAME }}.app" 200 280 \
-          --file "INSTALL_INSTRUCTIONS_macOS.txt" 550 150 \
-          --app-drop-link 600 280 \
-          --eula "INSTALL_INSTRUCTIONS_macOS.txt" \
-          --format UDZO \
-          --hdiutil-quiet \
-          "${{ env.OUTPUT_NAME }}-macos-unsigned.dmg" \
-          "./bundle/" || {
-            echo "create-dmg failed, creating simple DMG with hdiutil"
-            hdiutil create -volname "MaIN CLI Installer" -srcfolder "./bundle/" -ov -format UDZO "${{ env.OUTPUT_NAME }}-macos-unsigned.dmg"
-          }
-        
-        # Verify DMG was created
-        ls -la ./*.dmg
-
-    # Create simple zip as fallback
-    - name: Create ZIP fallback
-      run: |
-        cd ./bundle && zip -r "../${{ env.OUTPUT_NAME }}-macos-app.zip" . && cd ..
-        ls -la ./*macos*
-
-    # Upload macOS artifacts
-    - name: Upload macOS App Bundle
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.OUTPUT_NAME }}-macos-app
-        path: ./bundle/${{ env.OUTPUT_NAME }}.app
-        retention-days: 30
-
-    - name: Upload macOS DMG
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.OUTPUT_NAME }}-macos-dmg
-        path: ./${{ env.OUTPUT_NAME }}-macos-unsigned.dmg
-        retention-days: 30
-
-    - name: Upload macOS ZIP
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.OUTPUT_NAME }}-macos-zip
-        path: ./${{ env.OUTPUT_NAME }}-macos-app.zip
-        retention-days: 30
-
-  create-release:
-    runs-on: ubuntu-latest
-    needs: [build-and-publish, build-macos]
-    
-    steps:
-    - name: Download Windows artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: ${{ env.OUTPUT_NAME }}-windows-x64
-        path: ./artifacts/windows/
-      continue-on-error: true
-
-    - name: Download Linux artifacts  
-      uses: actions/download-artifact@v4
-      with:
-        name: ${{ env.OUTPUT_NAME }}-linux-x64
-        path: ./artifacts/linux/
-      continue-on-error: true
-
-    - name: Download macOS DMG
-      uses: actions/download-artifact@v4
-      with:
-        name: ${{ env.OUTPUT_NAME }}-macos-dmg
-        path: ./artifacts/macos-dmg/
-      continue-on-error: true
-
-    - name: Download macOS ZIP
-      uses: actions/download-artifact@v4
-      with:
-        name: ${{ env.OUTPUT_NAME }}-macos-zip  
-        path: ./artifacts/macos-zip/
-      continue-on-error: true
-
-    - name: Debug artifacts
-      run: |
-        echo "=== Checking what was downloaded ==="
-        ls -la ./
-        echo "=== Artifacts directory ==="
-        if [ -d "./artifacts" ]; then
-          find ./artifacts -type f -ls
-        else
-          echo "No artifacts directory found"
-        fi
-
-    - name: Prepare release files
-      run: |
-        mkdir -p ./release
-        
-        # Create Windows zip
-        if [ -d "./artifacts/windows" ] && [ "$(ls -A ./artifacts/windows)" ]; then
-          echo "Creating Windows zip..."
-          cd ./artifacts/windows && zip -r "../../release/${{ env.OUTPUT_NAME }}-win-x64.zip" ./* && cd -
-          echo "Windows zip created successfully"
-        else
-          echo "Warning: Windows artifacts not found"
-        fi
-        
-        # Create Linux zip  
-        if [ -d "./artifacts/linux" ] && [ "$(ls -A ./artifacts/linux)" ]; then
-          echo "Creating Linux zip..."
-          cd ./artifacts/linux && zip -r "../../release/${{ env.OUTPUT_NAME }}-linux-x64.zip" ./* && cd -
-          echo "Linux zip created successfully"
-        else
-          echo "Warning: Linux artifacts not found"
-        fi
-        
-        # Copy macOS DMG
-        if [ -d "./artifacts/macos-dmg" ]; then
-          echo "Copying macOS DMG..."
-          find ./artifacts/macos-dmg -name "*.dmg" -exec cp {} ./release/ \;
-        else
-          echo "Warning: macOS DMG not found"
-        fi
-        
-        # Copy macOS ZIP
-        if [ -d "./artifacts/macos-zip" ]; then
-          echo "Copying macOS ZIP..."
-          find ./artifacts/macos-zip -name "*.zip" -exec cp {} ./release/ \;
-        else
-          echo "Warning: macOS ZIP not found"
-        fi
-        
-        echo "=== Final release files ==="
-        ls -la ./release/
-
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v${{ github.run_number }}
-        name: Release v${{ github.run_number }}
-        draft: false
-        prerelease: false
-        files: |
-          ./release/${{ env.OUTPUT_NAME }}-win-x64.zip
-          ./release/${{ env.OUTPUT_NAME }}-linux-x64.zip
-          ./release/${{ env.OUTPUT_NAME }}-macos-unsigned.dmg
-          ./release/${{ env.OUTPUT_NAME }}-macos-app.zip
-        body: |
-          ## MaIN CLI Release v${{ github.run_number }}
+              <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+                <Component Id="MainExecutable" Guid="{$(New-Guid)}">
+                  <File Id="mcli.exe" 
+                        Source="publish\mcli.exe" 
+                        KeyPath="yes" />
+                </Component>
+              </ComponentGroup>
           
-          Automated release built from commit: `${{ github.sha }}`
+              <Component Id="PathComponent" Directory="INSTALLFOLDER" Guid="{$(New-Guid)}">
+                <Environment Id="PATH" 
+                            Name="PATH" 
+                            Value="[INSTALLFOLDER]" 
+                            Permanent="no" 
+                            Part="last" 
+                            Action="set" 
+                            System="yes" />
+              </Component>
           
-          ## Downloads
+            </Product>
+          </Wix>
+          "@
           
-          - **Windows x64**: `${{ env.OUTPUT_NAME }}-win-x64.zip`
-          - **Linux x64**: `${{ env.OUTPUT_NAME }}-linux-x64.zip`  
-          - **macOS x64**: `${{ env.OUTPUT_NAME }}-macos-unsigned.dmg` ⭐ **RECOMMENDED**
-          - **macOS (alternative)**: `${{ env.OUTPUT_NAME }}-macos-app.zip`
-          
-          ## 🍎 macOS Installation Instructions
-          
-          **⚠️ IMPORTANT: The macOS version is currently UNSIGNED**
-          
-          ### Method 1: DMG Installation (Recommended)
-          1. Download `${{ env.OUTPUT_NAME }}-macos-unsigned.dmg`
-          2. Open the DMG file
-          3. Read the installation instructions inside the DMG
-          4. Drag the app to Applications folder
-          5. **First launch**: Right-click app → "Open" → Click "Open" in warning
-          
-          ### Method 2: ZIP Installation
-          1. Download `${{ env.OUTPUT_NAME }}-macos-app.zip`
-          2. Extract and move `${{ env.OUTPUT_NAME }}.app` to Applications
-          3. **First launch**: Right-click app → "Open" → Click "Open" in warning
-          
-          ### Why the security warning?
-          Apple requires a Developer ID certificate ($99/year) to sign apps and eliminate security warnings. We're working on getting this set up for future releases.
-          
-          **The app is safe** - it's built from open source code using GitHub Actions!
-          
-          ## Requirements
-          - **.NET 9.0 Runtime** must be installed on your system
-          - **Windows**: Windows 10 or later
-          - **Linux**: Most modern distributions  
-          - **macOS**: macOS 10.15 (Catalina) or later
-          
-          ## Support
-          If you encounter issues, please open an issue on GitHub with:
-          - Your operating system and version
-          - Error messages (check Terminal on macOS/Linux)
-          - Steps to reproduce the problem
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          $wxsContent | Out-File -FilePath "installer.wxs" -Encoding UTF8
+
+      - name: Compile WiX object file
+        run: candle.exe installer.wxs -out installer.wixobj
+
+      - name: Link MSI file
+        run: light.exe installer.wixobj -out "${{ env.ASSEMBLY_NAME }}-installer.msi" -spdb
+
+      - name: Upload MSI as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: msi-installer
+          path: "${{ env.ASSEMBLY_NAME }}-installer.msi"
+
+      - name: Create Release (on tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: "${{ env.ASSEMBLY_NAME }}-installer.msi"
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
