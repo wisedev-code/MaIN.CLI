@@ -1,3 +1,4 @@
+
 name: Build and Create MSI Installer
 
 on:
@@ -54,17 +55,51 @@ jobs:
         run: |
           # Get all files in publish directory
           $publishFiles = Get-ChildItem -Path "publish" -Recurse -File
-          $componentGroups = ""
+          $directories = @{}
           $fileComponents = ""
+          $directoryStructure = ""
           $fileId = 1
           
+          # Create directory structure
           foreach ($file in $publishFiles) {
-            $relativePath = $file.FullName.Replace((Get-Location).Path + "\publish\", "").Replace("\", "/")
-            $sourceFile = "publish\" + $relativePath.Replace("/", "\")
+            $relativePath = $file.FullName.Replace((Get-Location).Path + "\publish\", "")
+            $directoryPath = Split-Path $relativePath -Parent
+            if ($directoryPath -and $directoryPath -ne "." -and !$directories.ContainsKey($directoryPath)) {
+              $directories[$directoryPath] = "Dir" + $directories.Count
+            }
+          }
+          
+          # Build directory structure XML
+          foreach ($dir in $directories.Keys | Sort-Object) {
+            $dirId = $directories[$dir]
+            $dirName = Split-Path $dir -Leaf
+            $parentPath = Split-Path $dir -Parent
+          
+            if ($parentPath -and $parentPath -ne ".") {
+              $parentId = $directories[$parentPath]
+              $directoryStructure += "`n              <Directory Id=`"$dirId`" Name=`"$dirName`" />"
+            } else {
+              $directoryStructure += "`n            <Directory Id=`"$dirId`" Name=`"$dirName`" />"
+            }
+          }
+          
+          # Create file components
+          foreach ($file in $publishFiles) {
+            $relativePath = $file.FullName.Replace((Get-Location).Path + "\publish\", "")
+            $sourceFile = "publish\" + $relativePath
             $fileName = $file.Name
             $fileIdStr = "File$fileId"
             $componentId = "Component$fileId"
+            $directoryPath = Split-Path $relativePath -Parent
           
+            # Determine target directory
+            if ($directoryPath -and $directoryPath -ne ".") {
+              $targetDir = $directories[$directoryPath]
+            } else {
+              $targetDir = "INSTALLFOLDER"
+            }
+          
+            # Set KeyPath for main executable
             if ($fileName -eq "mcli.exe") {
               $keyPath = 'KeyPath="yes"'
             } else {
@@ -72,12 +107,12 @@ jobs:
             }
           
             $fileComponents += @"
-                  <Component Id="$componentId" Guid="{$(New-Guid)}">
-                    <File Id="$fileIdStr" 
-                          Source="$sourceFile" 
-                          Name="$fileName"
-                          $keyPath />
-                  </Component>
+                <Component Id="$componentId" Directory="$targetDir" Guid="{$(New-Guid)}">
+                  <File Id="$fileIdStr" 
+                        Source="$sourceFile" 
+                        Name="$fileName"
+                        $keyPath />
+                </Component>
           "@
             $fileId++
           }
@@ -111,7 +146,8 @@ jobs:
               <Directory Id="TARGETDIR" Name="SourceDir">
                 <Directory Id="ProgramFilesFolder">
                   <Directory Id="CompanyFolder" Name="wisedev-code">
-                    <Directory Id="INSTALLFOLDER" Name="MaIN.NET CLI" />
+                    <Directory Id="INSTALLFOLDER" Name="MaIN.NET CLI">$directoryStructure
+                    </Directory>
                   </Directory>
                 </Directory>
                 <Directory Id="ProgramMenuFolder">
@@ -119,7 +155,7 @@ jobs:
                 </Directory>
               </Directory>
           
-              <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+              <ComponentGroup Id="ProductComponents">
           $fileComponents
               </ComponentGroup>
           
