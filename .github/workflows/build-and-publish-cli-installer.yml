@@ -35,11 +35,11 @@ jobs:
         run: dotnet test --configuration Release --no-build --verbosity normal
         continue-on-error: true
 
-      - name: Publish self-contained executable
+      - name: Publish multiplatform
         run: |
           dotnet publish ${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}.csproj `
           --configuration Release `
-          --output ./publish `
+          --output ./publish
 
       - name: Copy icon file for installer
         run: Copy-Item "${{ env.PROJECT_NAME }}\main.ico" -Destination "main.ico"
@@ -52,6 +52,36 @@ jobs:
 
       - name: Create WiX source file
         run: |
+          # Get all files in publish directory
+          $publishFiles = Get-ChildItem -Path "publish" -Recurse -File
+          $componentGroups = ""
+          $fileComponents = ""
+          $fileId = 1
+          
+          foreach ($file in $publishFiles) {
+            $relativePath = $file.FullName.Replace((Get-Location).Path + "\publish\", "").Replace("\", "/")
+            $sourceFile = "publish\" + $relativePath.Replace("/", "\")
+            $fileName = $file.Name
+            $fileIdStr = "File$fileId"
+            $componentId = "Component$fileId"
+          
+            if ($fileName -eq "mcli.exe") {
+              $keyPath = 'KeyPath="yes"'
+            } else {
+              $keyPath = ''
+            }
+          
+            $fileComponents += @"
+                  <Component Id="$componentId" Guid="{$(New-Guid)}">
+                    <File Id="$fileIdStr" 
+                          Source="$sourceFile" 
+                          Name="$fileName"
+                          $keyPath />
+                  </Component>
+          "@
+            $fileId++
+          }
+          
           $wxsContent = @"
           <?xml version="1.0" encoding="UTF-8"?>
           <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
@@ -90,11 +120,7 @@ jobs:
               </Directory>
           
               <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-                <Component Id="MainExecutable" Guid="{$(New-Guid)}">
-                  <File Id="mcli.exe" 
-                        Source="publish\mcli.exe" 
-                        KeyPath="yes" />
-                </Component>
+          $fileComponents
               </ComponentGroup>
           
               <Component Id="PathComponent" Directory="INSTALLFOLDER" Guid="{$(New-Guid)}">
