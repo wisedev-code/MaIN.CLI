@@ -38,4 +38,8 @@
       </None>
     </ItemGroup>
 
+    <ItemGroup>
+      <PackageReference Include="MaIN.NET" Version="*"/>
+    </ItemGroup>
+
 </Project>

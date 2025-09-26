@@ -1,4 +1,5 @@
 ﻿using MaIN.CLI.Utils;
+using MaIN.Core.Hub;
 
 namespace MaIN.CLI.CommandHandlers;
 
@@ -36,14 +37,25 @@ internal partial class CommandHandlers
 
                 break;
             case "list":
-                var modelsMap = GetModelsMap();
-                if (modelsMap == null)
-                    return;
+
+                var modelContext = AIHub.Model();
+
+                var modelsList = modelContext.GetAll();
+                
                 Console.WriteLine("Available models:");
-                foreach (var model in modelsMap.Keys.OrderBy(k => k))
+                foreach (var model in modelsList)
                 {
-                    Console.WriteLine($"- {model}");
+                    Console.WriteLine($"- {model.Name}");
                 }
+
+                // var modelsMap = GetModelsMap();
+                // if (modelsMap == null)
+                //     return;
+                // Console.WriteLine("Available models:");
+                // foreach (var model in modelsMap.Keys.OrderBy(k => k))
+                // {
+                //     Console.WriteLine($"- {model}");
+                // }
 
                 break;
             case "present":
