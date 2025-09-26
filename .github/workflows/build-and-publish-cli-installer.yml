@@ -40,10 +40,7 @@ jobs:
           dotnet publish ${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}.csproj `
           --configuration Release `
           --runtime win-x64 `
-          --self-contained true `
           --output ./publish `
-          -p:PublishSingleFile=true `
-          -p:PublishTrimmed=true
 
       - name: Copy icon file for installer
         run: Copy-Item "${{ env.PROJECT_NAME }}\main.ico" -Destination "main.ico"
