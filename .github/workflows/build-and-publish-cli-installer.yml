@@ -1,4 +1,3 @@
-
 name: Build and Create MSI Installer
 
 on:
@@ -80,6 +79,7 @@ jobs:
               <Feature Id="ProductFeature" Title="MaIN.NET CLI" Level="1">
                 <ComponentGroupRef Id="ProductComponents" />
                 <ComponentRef Id="PathComponent" />
+                <ComponentRef Id="ApplicationShortcut" />
               </Feature>
           
               <Directory Id="TARGETDIR" Name="SourceDir">
